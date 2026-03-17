@@ -72,6 +72,43 @@ def normalize_role_display(role: str) -> str:
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "mzdy_app.sqlite")
 st.set_page_config(page_title="Výpočet mezd a prémií (AKENG)", layout="wide")
 
+USERS = {
+    "petr.smetal": "QwErTZ",
+    "tomas.kopp": "admin123",
+}
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "username" not in st.session_state:
+    st.session_state.username = None
+
+
+def _show_login():
+    st.title("Přihlášení")
+    with st.form("login_form", clear_on_submit=False):
+        username = st.text_input("Uživatel", value="")
+        password = st.text_input("Heslo", value="", type="password")
+        submitted = st.form_submit_button("Přihlásit")
+    if submitted:
+        if USERS.get((username or "").strip()) == (password or ""):
+            st.session_state.authenticated = True
+            st.session_state.username = (username or "").strip()
+            st.rerun()
+        else:
+            st.error("Neplatné přihlašovací údaje.")
+
+
+if not st.session_state.authenticated:
+    _show_login()
+    st.stop()
+
+with st.sidebar:
+    st.caption(f"Přihlášen: {st.session_state.username}")
+    if st.button("Odhlásit"):
+        st.session_state.authenticated = False
+        st.session_state.username = None
+        st.rerun()
+
 def get_conn():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
