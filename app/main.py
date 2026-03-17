@@ -8,6 +8,7 @@ import streamlit as st
 from io import BytesIO
 import calendar
 import datetime as dt
+import os
 
 def surname_key(full_name: str) -> str:
     """Return surname (last token) for sorting; fallback to full_name."""
@@ -68,7 +69,7 @@ def normalize_role_display(role: str) -> str:
 
 
 
-DB_PATH = "mzdy_app.sqlite"
+DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "mzdy_app.sqlite")
 st.set_page_config(page_title="Výpočet mezd a prémií (AKENG)", layout="wide")
 
 def get_conn():
