@@ -5,6 +5,7 @@ import pandas as pd
 import json
 import numpy as np
 import streamlit as st
+from streamlit_cookies_manager import EncryptedCookieManager
 from io import BytesIO
 import calendar
 import datetime as dt
@@ -70,15 +71,43 @@ def normalize_role_display(role: str) -> str:
 
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "mzdy_app.sqlite")
+# set_page_config must be the first Streamlit command; then cookies load before any UI.
 st.set_page_config(page_title="Výpočet mezd a prémií (AKENG)", layout="wide")
+
+cookies = EncryptedCookieManager(
+    prefix="akeng_mzdy/",
+    password="AKENG_MZDY_COOKIE_SECRET_2026",
+)
+if not cookies.ready():
+    st.stop()
 
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "admin"
 
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-if "username" not in st.session_state:
-    st.session_state.username = None
+
+def _apply_session_from_cookies():
+    if cookies.get("logged_in") == "1" and cookies.get("user") == "admin":
+        st.session_state["logged_in"] = True
+        st.session_state["user"] = "admin"
+    else:
+        st.session_state["logged_in"] = False
+        st.session_state["user"] = None
+
+
+_apply_session_from_cookies()
+
+
+def _persist_login():
+    cookies["logged_in"] = "1"
+    cookies["user"] = "admin"
+    cookies.save()
+
+
+def _clear_login_cookie():
+    for key in ("logged_in", "user"):
+        if key in cookies:
+            del cookies[key]
+    cookies.save()
 
 
 def _show_login():
@@ -91,22 +120,26 @@ def _show_login():
             submitted = st.form_submit_button("Přihlásit")
         if submitted:
             if (username or "").strip() == ADMIN_USERNAME and (password or "") == ADMIN_PASSWORD:
-                st.session_state.authenticated = True
-                st.session_state.username = ADMIN_USERNAME
+                st.session_state["logged_in"] = True
+                st.session_state["user"] = "admin"
+                cookies["logged_in"] = "1"
+                cookies["user"] = "admin"
+                cookies.save()
                 st.rerun()
             else:
                 st.error("Neplatné přihlašovací údaje.")
 
 
-if not st.session_state.authenticated:
+if not st.session_state["logged_in"]:
     _show_login()
     st.stop()
 
 with st.sidebar:
-    st.caption(f"Přihlášen: {st.session_state.username}")
+    st.caption(f"Přihlášen: {st.session_state['user']}")
     if st.button("Odhlásit"):
-        st.session_state.authenticated = False
-        st.session_state.username = None
+        _clear_login_cookie()
+        st.session_state["logged_in"] = False
+        st.session_state["user"] = None
         st.rerun()
 
 def get_conn():
