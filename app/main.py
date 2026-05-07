@@ -528,11 +528,12 @@ def add_month_like(new_month_key: str, source_month_key: str):
 
 def add_employee(full_name: str, role: str, coeff: float, counts_to_normative: int, receives_prod_bonus: int,
                  hourly_rate: float, fixed_allowance: float, allow_extra_bonus: int, is_active: int = 1):
+    rg = role_group(role)
     exec_query("""
-    INSERT INTO employees(full_name, role, coeff, counts_to_normative, receives_prod_bonus,
+    INSERT INTO employees(full_name, role, role_group, coeff, counts_to_normative, receives_prod_bonus,
                           hourly_rate, fixed_allowance, allow_extra_bonus, is_active)
-    VALUES(?,?,?,?,?,?,?,?,?)
-    """, (full_name, role, float(coeff), int(counts_to_normative), int(receives_prod_bonus),
+    VALUES(?,?,?,?,?,?,?,?,?,?)
+    """, (full_name, role, rg, float(coeff), int(counts_to_normative), int(receives_prod_bonus),
           float(hourly_rate), float(fixed_allowance), int(allow_extra_bonus), int(is_active)))
 
 st.title("Výpočet mezd a prémií (AKENG)")
