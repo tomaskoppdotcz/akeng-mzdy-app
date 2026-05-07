@@ -5,7 +5,6 @@ import pandas as pd
 import json
 import numpy as np
 import streamlit as st
-from streamlit_cookies_manager import EncryptedCookieManager
 from io import BytesIO
 import calendar
 import datetime as dt
@@ -71,69 +70,225 @@ def normalize_role_display(role: str) -> str:
 
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "mzdy_app.sqlite")
-# set_page_config must be the first Streamlit command; then cookies load before any UI.
 st.set_page_config(page_title="Výpočet mezd a prémií (AKENG)", layout="wide")
 
-cookies = EncryptedCookieManager(
-    prefix="akeng_mzdy/",
-    password="AKENG_MZDY_COOKIE_SECRET_2026",
-)
-if not cookies.ready():
-    st.stop()
-
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin"
+LOGIN_TOKEN = "akeng-admin-session-2026"
 
 
-def _apply_session_from_cookies():
-    if cookies.get("logged_in") == "1" and cookies.get("user") == "admin":
-        st.session_state["logged_in"] = True
-        st.session_state["user"] = "admin"
-    else:
-        st.session_state["logged_in"] = False
-        st.session_state["user"] = None
+def _query_auth_valid():
+    v = st.query_params.get("auth")
+    if v is None:
+        return False
+    if isinstance(v, list):
+        return len(v) > 0 and v[0] == LOGIN_TOKEN
+    return v == LOGIN_TOKEN
 
 
-_apply_session_from_cookies()
-
-
-def _clear_login_cookie():
-    for key in ("logged_in", "user"):
-        if key in cookies:
-            del cookies[key]
-    cookies.save()
+if _query_auth_valid():
+    st.session_state["logged_in"] = True
+    st.session_state["user"] = "admin"
 
 
 def _show_login():
-    col_left, col_mid, col_right = st.columns([1, 2, 1])
-    with col_mid:
-        st.title("Přihlášení")
+    """ERP-style login shell; auth logic unchanged (admin/admin + query token)."""
+    st.markdown(
+        """
+<style>
+  /* Login page — app view background */
+  [data-testid="stAppViewContainer"] > .main {
+    background: linear-gradient(165deg, #eef1f6 0%, #e8ecf4 48%, #f0f2f7 100%) !important;
+  }
+  section.main > div {
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  section.main .block-container {
+    padding-top: 1.5rem !important;
+    padding-bottom: 2.5rem !important;
+    max-width: 1180px !important;
+  }
+  /* Two-column row: login is the first horizontal stack on this view */
+  section.main div[data-testid="stHorizontalBlock"]:nth-of-type(1) {
+    gap: 1.5rem 2rem !important;
+    align-items: flex-start !important;
+  }
+  /* Left column: branding + feature cards */
+  section.main div[data-testid="stHorizontalBlock"]:nth-of-type(1) > div[data-testid="column"]:nth-child(1) {
+    min-width: min(100%, 320px) !important;
+  }
+  /* Right column: single card around title + form + footer */
+  section.main div[data-testid="stHorizontalBlock"]:nth-of-type(1) > div[data-testid="column"]:nth-child(2) [data-testid="stVerticalBlock"] {
+    background: #fff !important;
+    border-radius: 20px !important;
+    padding: 2rem 2rem 1.35rem !important;
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.05),
+      0 18px 44px rgba(79, 70, 229, 0.13) !important;
+    border: 1px solid rgba(226, 232, 240, 0.95) !important;
+  }
+  .mzdy-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5b6a8a;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.22);
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    margin-bottom: 1rem;
+  }
+  .mzdy-brand-title {
+    font-size: clamp(1.75rem, 3.5vw, 2.35rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    margin: 0 0 0.5rem 0;
+    background: linear-gradient(120deg, #3730a3 0%, #6366f1 42%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .mzdy-brand-sub {
+    font-size: 1.05rem;
+    color: #5c6478;
+    line-height: 1.5;
+    margin: 0 0 1.5rem 0;
+    max-width: 28rem;
+  }
+  .mzdy-accent-bar {
+    height: 4px;
+    width: 3.5rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #6366f1, #a855f7);
+    margin-bottom: 1.1rem;
+  }
+  .mzdy-info-card {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 1rem 1.15rem;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(99, 102, 241, 0.06);
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .mzdy-info-card:hover {
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08), 0 12px 32px rgba(99, 102, 241, 0.1);
+    transform: translateY(-1px);
+  }
+  .mzdy-info-card h4 {
+    margin: 0 0 0.35rem 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #312e81;
+  }
+  .mzdy-info-card p {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: #64748b;
+  }
+  .mzdy-login-card-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+    color: #1e1b4b;
+  }
+  .mzdy-login-card-lead {
+    font-size: 0.92rem;
+    color: #64748b;
+    margin: 0 0 1.25rem 0;
+    line-height: 1.55;
+  }
+  .mzdy-footer-note {
+    text-align: center;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    margin: 1rem 0 0 0;
+    letter-spacing: 0.02em;
+  }
+  /* Primary button in login form */
+  section.main div[data-testid="stHorizontalBlock"]:nth-of-type(1) > div[data-testid="column"]:nth-child(2) form[data-testid="stForm"] button[kind="primary"],
+  section.main div[data-testid="stHorizontalBlock"]:nth-of-type(1) > div[data-testid="column"]:nth-child(2) form[data-testid="stForm"] button[data-testid="baseButton-primary"] {
+    width: 100%;
+    border-radius: 10px !important;
+    padding: 0.65rem 1rem !important;
+    font-weight: 600 !important;
+    background: linear-gradient(120deg, #4f46e5 0%, #7c3aed 100%) !important;
+    border: none !important;
+    color: #fff !important;
+    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35) !important;
+  }
+  @media (max-width: 900px) {
+    section.main div[data-testid="stHorizontalBlock"]:nth-of-type(1) {
+      flex-direction: column-reverse !important;
+    }
+    section.main div[data-testid="stHorizontalBlock"]:nth-of-type(1) > div[data-testid="column"] {
+      width: 100% !important;
+      min-width: 100% !important;
+    }
+  }
+</style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_brand, col_login = st.columns([1.25, 1], gap="large")
+
+    with col_brand:
+        st.markdown(
+            """
+<div>
+  <div class="mzdy-badge">PAYROLL ERP • v1.0</div>
+  <div class="mzdy-accent-bar"></div>
+  <h1 class="mzdy-brand-title">MZDY AKENG</h1>
+  <p class="mzdy-brand-sub">Řízení mezd, docházky a odměňování</p>
+</div>
+<div class="mzdy-info-card"><h4>Docházka</h4><p>Evidence hodin, svátků, přesčasů a dovolené.</p></div>
+<div class="mzdy-info-card"><h4>Výsledky mezd</h4><p>Výpočet hrubé mzdy, bonusů a příplatků.</p></div>
+<div class="mzdy-info-card"><h4>Exporty</h4><p>Podklady pro účetní a XLSX exporty.</p></div>
+<div class="mzdy-info-card"><h4>Hodnocení</h4><p>Výkonnostní hodnocení zaměstnanců.</p></div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with col_login:
+        st.markdown(
+            """
+<h2 class="mzdy-login-card-title">Vítejte v MZDY AKENG</h2>
+<p class="mzdy-login-card-lead">Přihlaste se svým firemním účtem pro pokračování.</p>
+            """,
+            unsafe_allow_html=True,
+        )
         with st.form("login_form", clear_on_submit=False):
-            username = st.text_input("Uživatel", value="")
+            username = st.text_input("Uživatelské jméno nebo e-mail", value="")
             password = st.text_input("Heslo", value="", type="password")
-            submitted = st.form_submit_button("Přihlásit")
-        if submitted:
-            if (username or "").strip() == ADMIN_USERNAME and (password or "") == ADMIN_PASSWORD:
-                st.session_state["logged_in"] = True
-                st.session_state["user"] = "admin"
-                cookies["logged_in"] = "1"
-                cookies["user"] = "admin"
-                cookies.save()
-                st.rerun()
-            else:
-                st.error("Neplatné přihlašovací údaje.")
+            submitted = st.form_submit_button("Přihlásit se", type="primary", use_container_width=True)
+        st.markdown(
+            '<p class="mzdy-footer-note">MZDY AKENG • v1.0 • prostředí DEV</p>',
+            unsafe_allow_html=True,
+        )
+
+    if submitted:
+        if (username or "").strip() == "admin" and (password or "") == "admin":
+            st.session_state["logged_in"] = True
+            st.session_state["user"] = "admin"
+            st.query_params["auth"] = LOGIN_TOKEN
+            st.rerun()
+        else:
+            st.error("Neplatné přihlašovací údaje.")
 
 
-if not st.session_state["logged_in"]:
+if not st.session_state.get("logged_in", False):
     _show_login()
     st.stop()
 
 with st.sidebar:
-    st.caption(f"Přihlášen: {st.session_state['user']}")
+    st.caption(f"Přihlášen: {st.session_state.get('user', '')}")
     if st.button("Odhlásit"):
-        _clear_login_cookie()
-        st.session_state["logged_in"] = False
-        st.session_state["user"] = None
+        st.session_state.clear()
+        if "auth" in st.query_params:
+            del st.query_params["auth"]
         st.rerun()
 
 def get_conn():

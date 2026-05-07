@@ -5,7 +5,6 @@ import pandas as pd
 import json
 import numpy as np
 import streamlit as st
-from streamlit_cookies_manager import EncryptedCookieManager
 from io import BytesIO
 import calendar
 import datetime as dt
@@ -71,43 +70,23 @@ def normalize_role_display(role: str) -> str:
 
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "mzdy_app.sqlite")
-# set_page_config must be the first Streamlit command; then cookies load before any UI.
 st.set_page_config(page_title="Výpočet mezd a prémií (AKENG)", layout="wide")
 
-cookies = EncryptedCookieManager(
-    prefix="akeng_mzdy/",
-    password="AKENG_MZDY_COOKIE_SECRET_2026",
-)
-if not cookies.ready():
-    st.stop()
-
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin"
+LOGIN_TOKEN = "akeng-admin-session-2026"
 
 
-def _apply_session_from_cookies():
-    if cookies.get("logged_in") == "1" and cookies.get("user") == "admin":
-        st.session_state["logged_in"] = True
-        st.session_state["user"] = "admin"
-    else:
-        st.session_state["logged_in"] = False
-        st.session_state["user"] = None
+def _query_auth_valid():
+    v = st.query_params.get("auth")
+    if v is None:
+        return False
+    if isinstance(v, list):
+        return len(v) > 0 and v[0] == LOGIN_TOKEN
+    return v == LOGIN_TOKEN
 
 
-_apply_session_from_cookies()
-
-
-def _persist_login():
-    cookies["logged_in"] = "1"
-    cookies["user"] = "admin"
-    cookies.save()
-
-
-def _clear_login_cookie():
-    for key in ("logged_in", "user"):
-        if key in cookies:
-            del cookies[key]
-    cookies.save()
+if _query_auth_valid():
+    st.session_state["logged_in"] = True
+    st.session_state["user"] = "admin"
 
 
 def _show_login():
@@ -119,27 +98,25 @@ def _show_login():
             password = st.text_input("Heslo", value="", type="password")
             submitted = st.form_submit_button("Přihlásit")
         if submitted:
-            if (username or "").strip() == ADMIN_USERNAME and (password or "") == ADMIN_PASSWORD:
+            if (username or "").strip() == "admin" and (password or "") == "admin":
                 st.session_state["logged_in"] = True
                 st.session_state["user"] = "admin"
-                cookies["logged_in"] = "1"
-                cookies["user"] = "admin"
-                cookies.save()
+                st.query_params["auth"] = LOGIN_TOKEN
                 st.rerun()
             else:
                 st.error("Neplatné přihlašovací údaje.")
 
 
-if not st.session_state["logged_in"]:
+if not st.session_state.get("logged_in", False):
     _show_login()
     st.stop()
 
 with st.sidebar:
-    st.caption(f"Přihlášen: {st.session_state['user']}")
+    st.caption(f"Přihlášen: {st.session_state.get('user', '')}")
     if st.button("Odhlásit"):
-        _clear_login_cookie()
-        st.session_state["logged_in"] = False
-        st.session_state["user"] = None
+        st.session_state.clear()
+        if "auth" in st.query_params:
+            del st.query_params["auth"]
         st.rerun()
 
 def get_conn():
